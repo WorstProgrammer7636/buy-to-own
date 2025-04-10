@@ -1,39 +1,61 @@
 import React, { useState } from 'react';
-import { View, Text, Button, Image, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  Button,
+  Image,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
+  StyleSheet,
+} from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
+import RatingIcon from '../../components/RatingIcon';
+import type { ViewStyle } from 'react-native';
+
+const BASE_URL = 'http://172.20.10.11:8000'; // Replace with your current local IP
 
 export default function HomeScreen() {
   const [images, setImages] = useState<string[]>([]);
-  const [analysis, setAnalysis] = useState<any[]>([]);
+  type AnalysisItem = {
+    message: string;
+    rating: string;
+    reason: string;
+    suggestion?: string;
+  };
+  
+  const [analysis, setAnalysis] = useState<AnalysisItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [showMessages, setShowMessages] = useState(false);
+  const [step, setStep] = useState(0);
 
   const analyzeWithAPI = async (uri: string) => {
     setIsLoading(true);
     setAnalysis([]);
+    setStep(0);
+    setShowMessages(false);
 
     const formData = new FormData();
     formData.append('files', {
-      uri: uri,
+      uri,
       name: 'screenshot.jpg',
       type: 'image/jpeg',
     } as any);
 
     try {
-      const res = await axios.post('http://10.191.19.99:8000/analyze', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+      const res = await axios.post(`${BASE_URL}/analyze`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      //problem here
-      if (res.status === 200) {
-        setAnalysis(res.data.analysis); // assumes your backend returns structured list
+      if (res.status === 200 && Array.isArray(res.data.analysis)) {
+        setAnalysis(res.data.analysis);
       } else {
-        Alert.alert('Error', `Status: ${res.status}`);
+        Alert.alert('Error', 'Unexpected response from server.');
       }
     } catch (err: any) {
-      console.error(err);
+      console.error('❌ API error:', err);
       Alert.alert('Error', err.message || 'Something went wrong');
     } finally {
       setIsLoading(false);
@@ -59,65 +81,93 @@ export default function HomeScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#fff', padding: 24 }}>
-      <Text style={{ fontSize: 26, fontWeight: 'bold', textAlign: 'center', marginBottom: 20 }}>
-        📸 RizzRanked – Real GPT
-      </Text>
+    <View style={styles.container}>
+      <Text style={styles.title}>💬 RizzRanked</Text>
 
-      <Button title="Upload Image from Phone" onPress={pickImage} />
+      <Button title="📁 Upload Screenshot" onPress={pickImage} />
 
-      <ScrollView style={{ maxHeight: 300, marginTop: 20 }} contentContainerStyle={{ alignItems: 'center' }}>
+      <ScrollView style={styles.imageContainer} contentContainerStyle={{ alignItems: 'center' }}>
         {images.map((uri, i) => (
           <Image
             key={i}
             source={{ uri }}
-            style={{ width: '100%', height: 200, marginBottom: 10, borderRadius: 10 }}
+            style={styles.image}
             resizeMode="contain"
           />
         ))}
       </ScrollView>
 
-      {isLoading && <ActivityIndicator size="large" style={{ marginTop: 20 }} />}
+      {isLoading && <ActivityIndicator size="large" style={{ marginTop: 30 }} color="#007aff" />}
 
-      <ScrollView style={{ marginTop: 20 }} contentContainerStyle={{ paddingBottom: 60 }}>
-  {analysis.length > 0 && (
-    <View>
-      <Text style={{ fontSize: 22, fontWeight: 'bold', marginBottom: 12, textAlign: 'center' }}>
-        📊 RizzRanked Analysis
-      </Text>
+      {!isLoading && analysis.length > 0 && !showMessages && (
+        <Button title="Start Analysis" onPress={() => setShowMessages(true)} />
+      )}
 
-      {analysis.map((item, i) => (
-        <View
-          key={i}
-          style={{
-            backgroundColor: '#f5f5f5',
-            padding: 15,
-            borderRadius: 10,
-            marginBottom: 12,
-            borderLeftWidth: 4,
-            borderLeftColor:
-              item.rating === 'Brilliant' ? '#4CAF50' :
-              item.rating === 'Excellent' ? '#8BC34A' :
-              item.rating === 'Good' ? '#CDDC39' :
-              item.rating === 'Inaccuracy' ? '#FFC107' :
-              item.rating === 'Mistake' ? '#FF9800' :
-              item.rating === 'Blunder' ? '#F44336' :
-              '#999'
-          }}
-        >
-          <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>💬 {item.message}</Text>
-          <Text style={{ marginBottom: 2 }}>🔎 <Text style={{ fontWeight: 'bold' }}>{item.rating}</Text></Text>
-          <Text style={{ marginBottom: 2 }}>🧠 {item.reason}</Text>
-          {item.suggestion && (
-            <Text>✨ <Text style={{ fontStyle: 'italic' }}>{item.suggestion}</Text></Text>
-          )}
+      {!isLoading && showMessages && (
+        <View style={{ marginTop: 20, flex: 1 }}>
+          <ScrollView style={{ flexGrow: 1 }} contentContainerStyle={{ paddingBottom: 120 }}>
+            {analysis.slice(0, step + 1).map((msg: any, i: number) => (
+              <View key={i} style={msgBubbleStyle(i % 2 === 0)}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Text style={{ color: i % 2 === 0 ? '#fff' : '#000', fontSize: 16 }}>{msg.message}</Text>
+                  {i % 2 === 0 && <RatingIcon rating={msg.rating} />}
+                </View>
+                {i % 2 === 0 && (
+                  <Text style={styles.reasonText}>
+                    🧠 {msg.reason}
+                    {msg.suggestion && `\n✨ ${msg.suggestion}`}
+                  </Text>
+                )}
+              </View>
+            ))}
+          </ScrollView>
+
+          <View style={styles.navButtons}>
+            <TouchableOpacity onPress={() => setStep((s) => Math.max(s - 1, 0))}>
+              <Text style={styles.navText}>⬅️ Back</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setStep((s) => Math.min(s + 1, analysis.length - 1))}>
+              <Text style={styles.navText}>Next ➡️</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      ))}
-    </View>
-  )}
-</ScrollView>
-
-
+      )}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#f9f9f9', padding: 20 },
+  title: { fontSize: 28, fontWeight: 'bold', textAlign: 'center', marginBottom: 20 },
+  imageContainer: { marginTop: 20, maxHeight: 250 },
+  image: {
+    width: '100%',
+    height: 200,
+    marginBottom: 10,
+    borderRadius: 16,
+    borderColor: '#ddd',
+    borderWidth: 1,
+  },
+  navButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 20,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#ccc',
+  },
+  navText: { fontSize: 18, fontWeight: '600', color: '#007aff' },
+  reasonText: { color: '#ccc', marginTop: 6, fontSize: 13 },
+});
+
+const msgBubbleStyle = (isUser: boolean): ViewStyle => {
+  return {
+    alignSelf: isUser ? 'flex-end' : 'flex-start',
+    backgroundColor: isUser ? '#007aff' : '#e5e5ea',
+    padding: 12,
+    marginVertical: 6,
+    marginHorizontal: 10,
+    borderRadius: 18,
+    maxWidth: '75%' as any,  // 👈 this fixes the TypeScript complaint
+  };
+};
