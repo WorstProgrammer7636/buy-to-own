@@ -1,44 +1,56 @@
 import React, { useState } from 'react';
 import { View, Text, Button, Image, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-
-const fakeFeedback = [
-  {
-    message: '“yo what u doing later”',
-    rating: 'Mistake',
-    reason: 'Too generic. Missed chance to add flavor.',
-    suggestion: '“I got a plan and it involves us. You in?”'
-  },
-  {
-    message: '“haha that’s crazy”',
-    rating: 'Blunder',
-    reason: 'Didn’t carry the convo.',
-    suggestion: 'Ask a follow-up or tease a bit.'
-  },
-  {
-    message: '“that was actually funny ngl”',
-    rating: 'Good',
-    reason: 'Genuine response, but could go further.',
-    suggestion: '“You gotta teach me that energy 😅”'
-  }
-];
+import axios from 'axios';
 
 export default function HomeScreen() {
   const [images, setImages] = useState<string[]>([]);
   const [analysis, setAnalysis] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
+  const analyzeWithAPI = async (uri: string) => {
+    setIsLoading(true);
+    setAnalysis([]);
+
+    const formData = new FormData();
+    formData.append('files', {
+      uri: uri,
+      name: 'screenshot.jpg',
+      type: 'image/jpeg',
+    } as any);
+
+    try {
+      const res = await axios.post('http://10.191.19.99:8000/analyze', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      //problem here
+      if (res.status === 200) {
+        setAnalysis(res.data.analysis); // assumes your backend returns structured list
+      } else {
+        Alert.alert('Error', `Status: ${res.status}`);
+      }
+    } catch (err: any) {
+      console.error(err);
+      Alert.alert('Error', err.message || 'Something went wrong');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const pickImage = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 1,
-        allowsMultipleSelection: true, // safe even if not supported yet
       });
 
       if (!result.canceled && result.assets.length > 0) {
-        setImages(result.assets.map((asset) => asset.uri));
-        setAnalysis([]);
+        const uri = result.assets[0].uri;
+        setImages([uri]);
+        analyzeWithAPI(uri);
       }
     } catch (error) {
       console.error(error);
@@ -46,22 +58,13 @@ export default function HomeScreen() {
     }
   };
 
-  const handleAnalyze = () => {
-    if (images.length === 0) return;
-    setIsLoading(true);
-    setTimeout(() => {
-      setAnalysis(fakeFeedback);
-      setIsLoading(false);
-    }, 2000);
-  };
-
   return (
     <View style={{ flex: 1, backgroundColor: '#fff', padding: 24 }}>
       <Text style={{ fontSize: 26, fontWeight: 'bold', textAlign: 'center', marginBottom: 20 }}>
-        📸 RizzRanked – Upload & Simulate
+        📸 RizzRanked – Real GPT
       </Text>
 
-      <Button title="Upload Images from Phone" onPress={pickImage} />
+      <Button title="Upload Image from Phone" onPress={pickImage} />
 
       <ScrollView style={{ maxHeight: 300, marginTop: 20 }} contentContainerStyle={{ alignItems: 'center' }}>
         {images.map((uri, i) => (
@@ -74,27 +77,47 @@ export default function HomeScreen() {
         ))}
       </ScrollView>
 
-      {images.length > 0 && (
-        <Button title={isLoading ? 'Analyzing...' : 'Analyze These'} onPress={handleAnalyze} disabled={isLoading} />
-      )}
-
       {isLoading && <ActivityIndicator size="large" style={{ marginTop: 20 }} />}
 
-      {analysis.length > 0 && (
-        <View style={{ marginTop: 20 }}>
-          <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 10 }}>📊 GPT-Style Feedback</Text>
-          <ScrollView>
-            {analysis.map((item, i) => (
-              <View key={i} style={{ marginBottom: 20 }}>
-                <Text style={{ fontWeight: 'bold' }}>💬 {item.message}</Text>
-                <Text>🔎 Rating: {item.rating}</Text>
-                <Text>🧠 Reason: {item.reason}</Text>
-                <Text>✨ Suggestion: {item.suggestion}</Text>
-              </View>
-            ))}
-          </ScrollView>
+      <ScrollView style={{ marginTop: 20 }} contentContainerStyle={{ paddingBottom: 60 }}>
+  {analysis.length > 0 && (
+    <View>
+      <Text style={{ fontSize: 22, fontWeight: 'bold', marginBottom: 12, textAlign: 'center' }}>
+        📊 RizzRanked Analysis
+      </Text>
+
+      {analysis.map((item, i) => (
+        <View
+          key={i}
+          style={{
+            backgroundColor: '#f5f5f5',
+            padding: 15,
+            borderRadius: 10,
+            marginBottom: 12,
+            borderLeftWidth: 4,
+            borderLeftColor:
+              item.rating === 'Brilliant' ? '#4CAF50' :
+              item.rating === 'Excellent' ? '#8BC34A' :
+              item.rating === 'Good' ? '#CDDC39' :
+              item.rating === 'Inaccuracy' ? '#FFC107' :
+              item.rating === 'Mistake' ? '#FF9800' :
+              item.rating === 'Blunder' ? '#F44336' :
+              '#999'
+          }}
+        >
+          <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>💬 {item.message}</Text>
+          <Text style={{ marginBottom: 2 }}>🔎 <Text style={{ fontWeight: 'bold' }}>{item.rating}</Text></Text>
+          <Text style={{ marginBottom: 2 }}>🧠 {item.reason}</Text>
+          {item.suggestion && (
+            <Text>✨ <Text style={{ fontStyle: 'italic' }}>{item.suggestion}</Text></Text>
+          )}
         </View>
-      )}
+      ))}
+    </View>
+  )}
+</ScrollView>
+
+
     </View>
   );
 }
