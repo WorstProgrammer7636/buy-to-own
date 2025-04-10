@@ -1,83 +1,35 @@
 import React, { useState } from 'react';
-import { View, Text, Button, Alert, Image, ScrollView, ActivityIndicator } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
-import axios from 'axios';
+import { View, Text, Button, Image, ScrollView } from 'react-native';
 
 export default function HomeScreen() {
-  const [images, setImages] = useState<ImagePicker.ImagePickerAsset[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [analysis, setAnalysis] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const pickImages = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      allowsMultipleSelection: true,
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 1,
-    });
-
-    if (!result.canceled) {
-      setImages(result.assets);
-      setAnalysis('');
-    }
-  };
-
-  const analyzeImages = async () => {
-    try {
-      setIsLoading(true);
-      setAnalysis('');
-
-      const formData = new FormData();
-      images.forEach((image, index) => {
-        formData.append('files', {
-          uri: image.uri,
-          name: `image${index}.jpg`,
-          type: 'image/jpeg',
-        } as any);
-      });
-
-      const res = await axios.post('http://192.168.1.124:8000/analyze', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-
-      if (res.status === 200) {
-        setAnalysis(res.data.analysis.join('\n\n'));
-      } else {
-        setAnalysis(`Error: ${res.status}`);
-      }
-    } catch (err: any) {
-      console.error(err);
-      Alert.alert('Error', err.message || 'Something went wrong');
-    } finally {
+  const simulateAnalysis = () => {
+    setIsLoading(true);
+    setTimeout(() => {
+      setAnalysis(
+        `🎯 Message 1: "wyd tonight"\nRating: Inaccuracy\nSuggestion: Be more intentional.\n\n` +
+        `💬 Message 2: "u free this weekend?"\nRating: Good\nSuggestion: Add a flirty twist.`
+      );
       setIsLoading(false);
-    }
+    }, 1500);
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#fff', paddingTop: 60, paddingHorizontal: 20 }}>
-      <Text style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' }}>📸 RizzRanked</Text>
+    <View style={{ flex: 1, backgroundColor: '#fff', padding: 24 }}>
+      <Text style={{ fontSize: 28, fontWeight: 'bold', textAlign: 'center', marginBottom: 20 }}>
+        💸 RizzRanked
+      </Text>
 
-      <Button title="Upload Conversation Screenshots" onPress={pickImages} />
+      <Image
+        source={{ uri: 'https://i.imgur.com/AItCxSs.png' }} // placeholder meme image
+        style={{ width: '100%', height: 220, borderRadius: 12, marginBottom: 20 }}
+        resizeMode="contain"
+      />
 
-      <ScrollView style={{ marginVertical: 20 }} contentContainerStyle={{ alignItems: 'center' }}>
-        {images.map((img, index) => (
-          <Image
-            key={index}
-            source={{ uri: img.uri }}
-            style={{ width: '100%', height: 200, marginBottom: 10 }}
-            resizeMode="contain"
-          />
-        ))}
-      </ScrollView>
-
-      {images.length > 0 && (
-        <Button
-          title={isLoading ? 'Analyzing...' : 'Analyze with GPT'}
-          onPress={analyzeImages}
-          disabled={isLoading}
-        />
-      )}
+      <Button title={isLoading ? 'Analyzing...' : 'Analyze Conversation'} onPress={simulateAnalysis} disabled={isLoading} />
+      
 
       {analysis !== '' && (
         <ScrollView style={{ marginTop: 20 }}>
